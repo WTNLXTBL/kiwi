@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        platform: [arm, arm64, x86, x64]
+        platform: [arm64]
 
     # The GitHub Actions machines have a "slow disk", and a SSD "fast" disk.
     # However, there is not enough space to do all the processing on the SSD.
@@ -43,9 +43,6 @@ jobs:
 
       - name: Updating APT repository
         run: sudo apt-get update
-
-      - name: Installing rclone
-        run: curl https://rclone.org/install.sh | sudo bash
 
       - name: Installing Python and OpenJDK
         run: sudo apt-get install -y python-is-python3 openjdk-8-jdk-headless libncurses5 ccache
@@ -88,49 +85,15 @@ jobs:
       - name: Copying args.gn to target folder
         run: cat .build/android_arm/args.gn | sed "s#target_cpu = \"arm\"#target_cpu = \"${{ matrix.platform }}\"#" | sed "s#android_default_version_name = \"Git\"#android_default_version_name = \"Git$(date '+%y%m%d')Gen${{ github.run_id }}\"#" > secondary_disk/out/android_${{ matrix.platform }}/args.gn
 
-      - name: Creating rclone config
-        run: |
-          mkdir -p $HOME/.config/rclone/
-          echo '[cache]' > $HOME/.config/rclone/rclone.conf
-          echo 'type = sftp' >> $HOME/.config/rclone/rclone.conf
-          echo 'host = ${{ secrets.STORAGE_HOST }}' >> $HOME/.config/rclone/rclone.conf
-          echo 'user = storage' >> $HOME/.config/rclone/rclone.conf
-          echo 'key_pem = ${{ secrets.STORAGE_KEY }}' >> $HOME/.config/rclone/rclone.conf
-
-      - name: Modifying args.gn (arm)
-        if: matrix.platform == 'arm'
-        run: sed -i "s#android_default_version_code = \"1\"#android_default_version_code = \"$(date '+%y%m%d')1\"#" secondary_disk/out/android_${{ matrix.platform }}/args.gn
-
       - name: Modifying args.gn (arm64)
         if: matrix.platform == 'arm64'
         run: sed -i "s#android_default_version_code = \"1\"#android_default_version_code = \"$(date '+%y%m%d')2\"#" secondary_disk/out/android_${{ matrix.platform }}/args.gn
-
-      - name: Modifying args.gn (x86)
-        if: matrix.platform == 'x86'
-        run: sed -i "s#android_default_version_code = \"1\"#android_default_version_code = \"$(date '+%y%m%d')3\"#" secondary_disk/out/android_${{ matrix.platform }}/args.gn
-
-      - name: Modifying args.gn (x64)
-        if: matrix.platform == 'x64'
-        run: sed -i "s#android_default_version_code = \"1\"#android_default_version_code = \"$(date '+%y%m%d')4\"#" secondary_disk/out/android_${{ matrix.platform }}/args.gn
 
       - name: Displaying args.gn
         run: cat secondary_disk/out/android_${{ matrix.platform }}/args.gn
 
       - name: Checking available disk-space
         run: df -h
-
-      - name: Uploading args.gn
-        run: rclone copy --fast-list --transfers=128 --retries=10 secondary_disk/out/android_${{ matrix.platform }}/args.gn cache:kiwibrowser-next-builds-${{ matrix.platform }}/
-
-      - name: Calling buildbot
-        if: false
-        run: curl ipinfo.io
-
-      - name: Downloading binary objects cache to $HOME/cache
-        run: rclone copy --fast-list --transfers=128 --retries=10 cache:kiwibrowser-next-builds-${{ matrix.platform }}/ $HOME/kiwibrowser-next-builds-${{ matrix.platform }}
-
-      - name: Transferring build to the standard Kiwi Browser run ID
-        run: rclone copy --fast-list --transfers=128 --retries=10 cache:kiwibrowser-next-builds-${{ matrix.platform }}/ cache:kiwibrowser-builds/${{ github.run_id }}/${{ matrix.platform }}
 
       - name: Listing files
         run: |
